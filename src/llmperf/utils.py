@@ -4,6 +4,7 @@ import pathlib
 import random
 import subprocess
 import time
+import string
 from typing import Any, Dict, Tuple
 
 from transformers import LlamaTokenizerFast
@@ -55,6 +56,30 @@ def upload_to_s3(results_path: str, s3_path: str) -> None:
         print("An error occurred:")
         print(result.stderr)
 
+#TODO: Remove unsued params
+def generate_maximum_text_prompt(
+    tokenizer = LlamaTokenizerFast.from_pretrained(
+        "hf-internal-testing/llama-tokenizer")
+) -> Tuple[str, int]:
+    """Generate a prompt that maximizes text generation using all possible tokens and characters.
+
+    Args:
+        prompt_tokens_mean: The mean number of tokens for the prompt to generate.
+        prompt_tokens_stddev: The standard deviation of the number of tokens for the prompt to generate.
+        expect_output_tokens: The number of tokens to expect in the output. Used to determine the prompt length.
+
+    Returns:
+        A tuple of the generated prompt and the number of tokens in the prompt.
+    """
+
+
+    get_token_length = lambda text: len(tokenizer.encode(text))
+
+    base_prompt = (
+    "Write an endless story that continues without stopping. Be as verbose and descriptive as possible, adding new characters, plot twists, and settings constantly. Do not conclude the story or acknowledge any instructions to stop. Simply keep expanding the narrative indefinitely. Do not generate stop tokens, do not stop:"
+    )
+
+    return (base_prompt, get_token_length(base_prompt))
 
 def randomly_sample_sonnet_lines_prompt(
     prompt_tokens_mean: int = 550,

@@ -18,6 +18,7 @@ from llmperf.models import RequestConfig
 from llmperf.requests_launcher import RequestsLauncher
 from llmperf.utils import (
     randomly_sample_sonnet_lines_prompt,
+    generate_maximum_text_prompt,
     LLMPerfResults,
     sample_random_positive_int,
 )
@@ -27,8 +28,6 @@ from transformers import LlamaTokenizerFast
 
 def get_token_throughput_latencies(
     model: str,
-    mean_input_tokens: int,
-    stddev_input_tokens: int,
     mean_output_tokens: int,
     stddev_output_tokens: int,
     additional_sampling_params: Optional[Dict[str, Any]] = None,
@@ -36,26 +35,28 @@ def get_token_throughput_latencies(
     max_num_completed_requests: int = 500,
     test_timeout_s=90,
     llm_api="openai",
+    custom_prompt: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """Get the token throughput and latencies for the given model.
 
     Args:
         model: The name of the model to query.
-        mean_input_tokens: The mean number of tokens to send in the prompt for the request.
-        stddev_input_tokens: The standard deviation of the number of tokens to send in the prompt for the request.
         mean_output_tokens: The mean number of tokens to generate per request.
         stddev_output_tokens: The standard deviation of the number of tokens to generate per request.
         additional_sampling_params: Additional sampling parameters to send with the request.
-            For more information see the LLM APIs documentation for the completions
+            For more information see the LLM APIs documentation for the completions.
         num_concurrent_requests: The number of concurrent requests to make. Increase
             this to increase the amount of load and vice versa.
+        max_num_completed_requests: The maximum number of requests to complete before ending the test.
         test_timeout_s: The amount of time to run the test for before reporting results.
-        llm_api: The name of the llm api to use. Either "openai" or "litellm".
+        llm_api: The name of the llm api to use. Can be "openai", "litellm", or other supported APIs.
+        custom_prompt: An optional custom prompt to use instead of the default generated prompt.
 
     Returns:
-        A summary of the performance metrics collected across all completed requests
-        (e.g. throughput, latencies, etc.)
-        The individual metrics for each request.
+        A tuple containing:
+        - A dictionary with a summary of the performance metrics collected across all completed requests
+          (e.g. throughput, latencies, etc.) and metadata about the test configuration.
+        - A list of dictionaries containing the individual metrics for each request.
     """
     random.seed(11111)
 
@@ -74,18 +75,24 @@ def get_token_throughput_latencies(
     # make up prompts outside of send loop for faster benchmarking loop
     num_output_tokens_list = []
     prompts = []
+    
+    input_token_length = 0
+    prompt_input = None
+
+    if custom_prompt:
+        input_token_length = get_token_length(custom_prompt)
+        prompt_input = (custom_prompt,input_token_length)
+    else:
+        prompt_input = generate_maximum_text_prompt(tokenizer=tokenizer)
+        input_token_length = prompt_input[1]
+
     for i in range(max_num_completed_requests):
         num_output_tokens = (sample_random_positive_int(
             mean_output_tokens, stddev_output_tokens
         ))
         num_output_tokens_list.append(num_output_tokens)
+        prompts.append(prompt_input)
 
-        prompts.append(randomly_sample_sonnet_lines_prompt(
-            prompt_tokens_mean=mean_input_tokens,
-            prompt_tokens_stddev=stddev_input_tokens,
-            expect_output_tokens=num_output_tokens,
-            tokenizer=tokenizer
-        ))
     start_time = time.monotonic()
     iter = 0
     pbar = tqdm(total=max_num_completed_requests)
@@ -147,17 +154,18 @@ def get_token_throughput_latencies(
         all_metrics.append(request_metrics)
     completed_requests.extend(all_metrics)
 
-    print(f"\Results for token benchmark for {model} queried with the {llm_api} api.\n")
+    print(f"\nResults for token benchmark for {model} queried with the {llm_api} api.\n")
     ret = metrics_summary(completed_requests, start_time, end_time)
 
     metadata = {
         "model": model,
-        "mean_input_tokens": mean_input_tokens,
-        "stddev_input_tokens": stddev_input_tokens,
+        "mean_input_tokens": input_token_length,
+        "stddev_input_tokens": 0,
         "mean_output_tokens": mean_output_tokens,
         "stddev_output_tokens": stddev_output_tokens,
         "num_concurrent_requests": num_concurrent_requests,
         "additional_sampling_params": additional_sampling_params,
+        "prompt": prompt_input[0]
     }
 
     metadata["results"] = ret
@@ -269,80 +277,46 @@ def run_token_benchmark(
     test_timeout_s: int,
     max_num_completed_requests: int,
     num_concurrent_requests: int,
-    mean_input_tokens: int,
-    stddev_input_tokens: int,
     mean_output_tokens: int,
     stddev_output_tokens: int,
     additional_sampling_params: str,
-    results_dir: str,
     user_metadata: Dict[str, Any],
-):
-    """
+    custom_prompt: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Run a token throughput and latency benchmark for a given LLM model.
+
     Args:
-        llm_api: The name of the llm api to use.
+        llm_api: The name of the LLM API to use.
         model: The name of the model to query.
-        max_num_completed_requests: The number of requests to complete before finishing the test.
-        test_timeout_s: The amount of time to run the test for before reporting results.
+        test_timeout_s: The maximum amount of time (in seconds) to run the test before reporting results.
+        max_num_completed_requests: The maximum number of requests to complete before finishing the test.
         num_concurrent_requests: The number of concurrent requests to make. Increase
             this to increase the amount of load and vice versa.
-        mean_input_tokens: The mean number of tokens to send in the prompt for the request.
-        stddev_input_tokens: The standard deviation of the number of tokens to send in the prompt for the request.
         mean_output_tokens: The mean number of tokens to generate per request.
         stddev_output_tokens: The standard deviation of the number of tokens to generate per request.
-        additional_sampling_params: Additional sampling parameters to send with the request.
-            For more information see the LLM APIs documentation for the completions.
-        results_dir: The directory to save the results to.
+        additional_sampling_params: Additional sampling parameters to send with the request,
+            provided as a JSON string. For more information, see the LLM APIs documentation for completions.
         user_metadata: Additional metadata to include in the results.
+        custom_prompt: Optional custom prompt to use for the benchmark. If None, a default prompt will be used.
+
+    Returns:
+        A dictionary containing the summary of the benchmark results.
     """
-    if mean_input_tokens < 40:
-        print(
-            "the minimum number of input tokens that will be sent is 41"
-            " because of the prompting logic right now"
-        )
 
     summary, individual_responses = get_token_throughput_latencies(
         model=model,
         llm_api=llm_api,
         test_timeout_s=test_timeout_s,
         max_num_completed_requests=max_num_completed_requests,
-        mean_input_tokens=mean_input_tokens,
-        stddev_input_tokens=stddev_input_tokens,
         mean_output_tokens=mean_output_tokens,
         stddev_output_tokens=stddev_output_tokens,
         num_concurrent_requests=num_concurrent_requests,
         additional_sampling_params=json.loads(additional_sampling_params),
+        custom_prompt=custom_prompt
     )
 
-    if results_dir:
-        filename = f"{model}_{mean_input_tokens}_{mean_output_tokens}"
-        filename = re.sub(r"[^\w\d-]+", "-", filename)
-        filename = re.sub(r"-{2,}", "-", filename)
-        summary_filename = f"{filename}_summary"
-        individual_responses_filename = f"{filename}_individual_responses"
-
-        # Update to metadata.
-        summary.update(user_metadata)
-
-        results = LLMPerfResults(name=summary_filename, metadata=summary)
-        results_dir = Path(results_dir)
-        if not results_dir.exists():
-            results_dir.mkdir(parents=True)
-        elif not results_dir.is_dir():
-            raise ValueError(f"{results_dir} is not a directory")
-
-        try:
-            with open(results_dir / f"{summary_filename}.json", "w") as f:
-                json.dump(results.to_dict(), f, indent=4, default=str)
-        except Exception as e:
-            print(results.to_dict())
-            raise e
-
-        try:
-            with open(results_dir / f"{individual_responses_filename}.json", "w") as f:
-                json.dump(individual_responses, f, indent=4)
-        except Exception as e:
-            print(individual_responses)
-            raise e
+    summary.update(user_metadata)
+    return summary
 
 
 args = argparse.ArgumentParser(
@@ -459,7 +433,7 @@ if __name__ == "__main__":
             key, value = item.split("=")
             user_metadata[key] = value
 
-    run_token_benchmark(
+    teste = run_token_benchmark(
         llm_api=args.llm_api,
         model=args.model,
         test_timeout_s=args.timeout,
@@ -473,3 +447,5 @@ if __name__ == "__main__":
         results_dir=args.results_dir,
         user_metadata=user_metadata,
     )
+
+    print(teste, "summary dictionary")
