@@ -36,6 +36,8 @@ def get_token_throughput_latencies(
     test_timeout_s=90,
     llm_api="openai",
     custom_prompt: Optional[str] = None,
+    model_url: Optional[str] = None,
+    api_key: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """Get the token throughput and latencies for the given model.
 
@@ -51,6 +53,8 @@ def get_token_throughput_latencies(
         test_timeout_s: The amount of time to run the test for before reporting results.
         llm_api: The name of the llm api to use. Can be "openai", "litellm", or other supported APIs.
         custom_prompt: An optional custom prompt to use instead of the default generated prompt.
+        model_url: The URL of the model API endpoint.
+        api_key: The API key for authentication.
 
     Returns:
         A tuple containing:
@@ -68,7 +72,7 @@ def get_token_throughput_latencies(
     if not additional_sampling_params:
         additional_sampling_params = {}
 
-    clients = construct_clients(llm_api=llm_api, num_clients=num_concurrent_requests)
+    clients = construct_clients(llm_api=llm_api, num_clients=num_concurrent_requests, api_base=model_url, api_key=api_key)
     req_launcher = RequestsLauncher(clients)
     completed_requests = []
     num_completed_requests = 0
@@ -279,9 +283,11 @@ def run_token_benchmark(
     num_concurrent_requests: int,
     mean_output_tokens: int,
     stddev_output_tokens: int,
-    additional_sampling_params: str,
-    user_metadata: Dict[str, Any],
+    additional_sampling_params: Optional[str] = "{}",
+    user_metadata: Dict[str, Any] = {},
     custom_prompt: Optional[str] = None,
+    model_url: Optional[str] = None,
+    api_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run a token throughput and latency benchmark for a given LLM model.
 
@@ -298,6 +304,8 @@ def run_token_benchmark(
             provided as a JSON string. For more information, see the LLM APIs documentation for completions.
         user_metadata: Additional metadata to include in the results.
         custom_prompt: Optional custom prompt to use for the benchmark. If None, a default prompt will be used.
+        model_url: Optional URL of the model API endpoint.
+        api_key: Optional API key for authentication.
 
     Returns:
         A dictionary containing the summary of the benchmark results.
@@ -312,7 +320,9 @@ def run_token_benchmark(
         stddev_output_tokens=stddev_output_tokens,
         num_concurrent_requests=num_concurrent_requests,
         additional_sampling_params=json.loads(additional_sampling_params),
-        custom_prompt=custom_prompt
+        custom_prompt=custom_prompt,
+        model_url=model_url,
+        api_key=api_key
     )
 
     summary.update(user_metadata)

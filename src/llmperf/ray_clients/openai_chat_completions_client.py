@@ -15,6 +15,10 @@ from llmperf import common_metrics
 class OpenAIChatCompletionsClient(LLMClient):
     """Client for OpenAI Chat Completions API."""
 
+    def __init__(self, api_base: str, api_key: str):
+        self.api_base = api_base
+        self.api_key = api_key
+
     def llm_request(self, request_config: RequestConfig) -> Dict[str, Any]:
         prompt = request_config.prompt
         prompt, prompt_len = prompt
@@ -47,15 +51,13 @@ class OpenAIChatCompletionsClient(LLMClient):
 
         start_time = time.monotonic()
         most_recent_received_token_time = time.monotonic()
-        address = os.environ.get("OPENAI_API_BASE")
+        address = self.api_base
         if not address:
-            raise ValueError("the environment variable OPENAI_API_BASE must be set.")
-        key = os.environ.get("OPENAI_API_KEY")
+            raise ValueError("API base URL must be provided.")
+        key = self.api_key
         if not key:
-            raise ValueError("the environment variable OPENAI_API_KEY must be set.")
+            raise ValueError("API key must be provided.")
         headers = {"Authorization": f"Bearer {key}"}
-        if not address:
-            raise ValueError("No host provided.")
         if not address.endswith("/"):
             address = address + "/"
         address += "chat/completions"
