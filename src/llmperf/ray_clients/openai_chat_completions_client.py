@@ -5,11 +5,11 @@ from typing import Any, Dict
 
 import ray
 import requests
+import logging
 
 from llmperf.ray_llm_client import LLMClient
 from llmperf.models import RequestConfig
 from llmperf import common_metrics
-
 
 @ray.remote
 class OpenAIChatCompletionsClient(LLMClient):
@@ -72,6 +72,8 @@ class OpenAIChatCompletionsClient(LLMClient):
                 if response.status_code != 200:
                     error_msg = response.text
                     error_response_code = response.status_code
+                    print("Error response code: ", error_response_code)
+                    print("Error message: ", error_msg)
                     response.raise_for_status()
                 for chunk in response.iter_lines(chunk_size=None):
                     chunk = chunk.strip()
@@ -108,8 +110,8 @@ class OpenAIChatCompletionsClient(LLMClient):
         except Exception as e:
             metrics[common_metrics.ERROR_MSG] = error_msg
             metrics[common_metrics.ERROR_CODE] = error_response_code
-            print(f"Warning Or Error: {e}")
-            print(error_response_code)
+            logging.debug(f"Warning Or Error: {e}")
+            logging.debug(error_response_code)
 
         metrics[common_metrics.INTER_TOKEN_LAT] = sum(time_to_next_token) #This should be same as metrics[common_metrics.E2E_LAT]. Leave it here for now
         metrics[common_metrics.TTFT] = ttft
