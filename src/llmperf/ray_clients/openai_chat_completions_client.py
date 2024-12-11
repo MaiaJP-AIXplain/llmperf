@@ -58,6 +58,9 @@ class OpenAIChatCompletionsClient(LLMClient):
         if not key:
             raise ValueError("API key must be provided.")
         headers = {"Authorization": f"Bearer {key}"}
+        # Add any additional header parameters from request config
+        if request_config.header_params:
+            headers.update(request_config.header_params)
         if not address.endswith("/"):
             address = address + "/"
         address += "chat/completions"
