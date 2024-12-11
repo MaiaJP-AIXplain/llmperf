@@ -71,6 +71,7 @@ class OpenAIChatCompletionsClient(LLMClient):
                 stream=True,
                 timeout=180,
                 headers=headers,
+                verify=request_config.verify_ssl,
             ) as response:
                 if response.status_code != 200:
                     error_msg = response.text

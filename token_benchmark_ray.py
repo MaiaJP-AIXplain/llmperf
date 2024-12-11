@@ -41,6 +41,7 @@ def get_token_throughput_latencies(
     model_url: Optional[str] = None,
     api_key: Optional[str] = None,
     header_params: Optional[Dict[str, Any]] = None,
+    verify_ssl: Optional[bool] = True,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """Get the token throughput and latencies for the given model.
 
@@ -59,6 +60,7 @@ def get_token_throughput_latencies(
         model_url: The URL of the model API endpoint.
         api_key: The API key for authentication.
         header_params: Optional additional header parameters to send with the request.
+        verify_ssl: Whether to verify SSL certificates when making requests. Defaults to True.
 
     Returns:
         A tuple containing:
@@ -118,6 +120,7 @@ def get_token_throughput_latencies(
             sampling_params=default_sampling_params,
             llm_api=llm_api,
             header_params=header_params,
+            verify_ssl=verify_ssl,
         )
         req_launcher.launch_requests(request_config)
         # Retrieving results less frequently allows for more concurrent requests
@@ -303,6 +306,7 @@ def run_token_benchmark(
     model_url: Optional[str] = None,
     api_key: Optional[str] = None,
     header_params: Optional[str] = "{}",
+    verify_ssl: Optional[bool] = True,
 ) -> Dict[str, Any]:
     """Run a token throughput and latency benchmark for a given LLM model.
 
@@ -322,6 +326,7 @@ def run_token_benchmark(
         model_url: Optional URL of the model API endpoint.
         api_key: Optional API key for authentication.
         header_params: Optional additional header parameters as a JSON string to send with the request.
+        verify_ssl: Whether to verify SSL certificates when making requests. Defaults to True.
 
     Returns:
         A dictionary containing the summary of the benchmark results.
@@ -344,7 +349,8 @@ def run_token_benchmark(
         custom_prompt=custom_prompt,
         model_url=model_url,
         api_key=api_key,
-        header_params=json.loads(header_params)
+        header_params=json.loads(header_params),
+        verify_ssl=verify_ssl
     )
 
     summary.update(user_metadata)

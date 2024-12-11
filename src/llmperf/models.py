@@ -13,6 +13,7 @@ class RequestConfig(BaseModel):
         llm_api: The name of the LLM API to send the request to.
         metadata: Additional metadata to attach to the request for logging or validation purposes.
         header_params: Additional header parameters to send with the request.
+        verify_ssl: Whether to verify SSL certificates when making requests. Defaults to True.
     """
 
     model: str
@@ -21,3 +22,4 @@ class RequestConfig(BaseModel):
     llm_api: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
     header_params: Optional[Dict[str, Any]] = None
+    verify_ssl: Optional[bool] = True
